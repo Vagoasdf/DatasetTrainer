@@ -31,7 +31,7 @@ class DatasetOrchester:
 
     def getTrainAmount(self):
 
-        return tf.data.experimental.cardinality(self.train_dataset).numpy()
+        return  self.train_dataset.__len__
 
     def getValDataset(self):
         return self.val_dataset

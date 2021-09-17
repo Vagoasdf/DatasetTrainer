@@ -12,8 +12,9 @@ class ModelBuilder:
         self.nro_classes = nro_classes
         self.dataset_val = dataset_val
         self.epochs = 0
+        importer = ModelImporter()
         if arquitecture == "VGG-16":
-            model = ModelImporter.getVGG16ForTransferLearning(nro_classes)
+            model = importer.getVGG16ForTransferLearning(nro_classes)
 
         self.loadLRange(model)
 
@@ -26,7 +27,7 @@ class ModelBuilder:
     def loadLRange(self,model):
         lr_finder = LRFinder()
 
-        model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+        model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
         model.fit(self.dataset_train, epochs=10, callbacks=[lr_finder], verbose=False)
         lr_finder.plot_loss()
         lr_finder.plot_accuracy()
@@ -72,8 +73,9 @@ class ModelImporter:
 
         inputs = tf.keras.Input(shape=(224, 224, 3))
         x = base_model(inputs, training=False)
+        x = tf.keras.layers.Dense(4092, activation='relu')(x)
+        x = tf.keras.layers.Dense(4092, activation='relu')(x)
         x = tf.keras.layers.GlobalAveragePooling2D()(x)
-        x = tf.keras.layers.Dense(1024,activation='relu')(x)
         outputs = tf.keras.layers.Dense(nClasses,activation='sigmoid')(x)
         model = tf.keras.Model(inputs, outputs)
         return model

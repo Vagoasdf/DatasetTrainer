@@ -18,14 +18,16 @@ from DatasetTrainer.Trainer.OneCyclePolicy import LRFinder, OneCycleScheduler
 
 
 def trainVGG_PV(train_url,val_url):
-    nro_class = 34
+    nro_class = 3
     orchester = DatasetOrchester(nro_class, val_url,train_url)
     trainGenerator = orchester.getTrainDataset()
+    #2550 img
     testGenerator = orchester.getValDataset()
-    train_number =  orchester.getTrainAmount()
+    # 711 img
+    train_number =  2550
     print(train_number)
 
-    VGG16_Builder = ModelBuilder(trainGenerator, testGenerator, nro_class,arquitecture="VGG-16")
+    VGG16_Builder = ModelBuilder(dataset_train=trainGenerator,dataset_val= testGenerator,nro_classes= nro_class,arquitecture="VGG-16")
     VGG16_PV = VGG16_Builder.getModel()
     print(VGG16_PV.summary())
 
@@ -39,10 +41,11 @@ def trainVGG_PV(train_url,val_url):
     cycle_callback=get1CycleCallback(epochs, train_number, lr_max=lr)
 
     optimizer = tf.keras.optimizers.RMSprop(learning_rate=lr)
-    VGG16_PV.compile(optimizer=optimizer, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    VGG16_PV.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
 
     ##Entrenar el Modelo
     history = VGG16_PV.fit(trainGenerator,
+                        callbacks=[lr_finder],
                         validation_data=testGenerator,
                         steps_per_epoch=100,
                         epochs=epochs,
