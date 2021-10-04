@@ -3,6 +3,8 @@
 #  Maneja paso a paso los módulos.
 # Aplica el entrenamiento.
 # Termina entregando el modelo entrenado.
+# La idea es que podamos agarrar un ctrl c ctrl v y meterlo a Kaggle
+#  y que funcione sin problemas
 ###
 
 ### Decidir HiperParámetros
@@ -16,61 +18,6 @@ from DatasetTrainer.Trainer.DatasetLoader import DatasetOrchester
 from DatasetTrainer.Trainer.ModelLoader import ModelBuilder
 from DatasetTrainer.Trainer.OneCyclePolicy import LRFinder, OneCycleScheduler
 
-
-def trainVGG_PV(train_url,val_url):
-    nro_class = 3
-    orchester = DatasetOrchester(nro_class, val_url,train_url)
-    trainGenerator = orchester.getTrainDataset()
-    #2550 img
-    testGenerator = orchester.getValDataset()
-    # 711 img
-    train_number =  2550
-    print(train_number)
-
-    VGG16_Builder = ModelBuilder(dataset_train=trainGenerator,dataset_val= testGenerator,nro_classes= nro_class,arquitecture="VGG-16")
-    VGG16_PV = VGG16_Builder.getModel()
-    print(VGG16_PV.summary())
-
-    ## Definir parametros de entrenamiento
-    lr = 0
-    epochs = 5
-    #lr=4e-1
-    if (lr == 0):
-        print (" BUSCAR LR")
-        return 0
-    cycle_callback=get1CycleCallback(epochs, train_number, lr_max=lr)
-
-    optimizer = tf.keras.optimizers.RMSprop(learning_rate=lr)
-    VGG16_PV.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
-
-    ##Entrenar el Modelo
-    history = VGG16_PV.fit(trainGenerator,
-                        callbacks=[lr_finder],
-                        validation_data=testGenerator,
-                        steps_per_epoch=100,
-                        epochs=epochs,
-                        validation_steps=50,
-                        verbose=1)
-
-    return VGG16_PV,history
-
-
-
-
-
-def loadTestDataset():
-    fashion_mnist = tf.keras.datasets.fashion_mnist
-    (x_train, y_train), (x_valid, y_valid) = fashion_mnist.load_data()
-    x_train, x_valid = x_train / 255.0, x_valid / 255.0
-
-    x_train = x_train[..., tf.newaxis]
-    x_valid = x_valid[..., tf.newaxis]
-
-    train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train)).shuffle(10000).batch(32)
-    valid_ds = tf.data.Dataset.from_tensor_slices((x_valid, y_valid)).batch(32)
-
-    return train_ds, valid_ds
-
 def testLRFinder(dataset,model):
 
     lr_finder = LRFinder()
@@ -80,13 +27,10 @@ def testLRFinder(dataset,model):
     lr_finder.plot_loss()
     lr_finder.plot_accuracy()
 
-def get1CycleCallback(epochs,train_number,lr_max):
-    batch_size = 32
+def get1CycleCallback(epochs, batch_size,train_number,lr_max):
     steps = np.ceil(train_number/batch_size)*epochs
     lr_schedule = OneCycleScheduler(lr_max=lr_max,steps=steps)
     return lr_schedule
-
-
 
 def evaluateModel(history):
     # -----------------------------------------------------------
@@ -115,6 +59,75 @@ def evaluateModel(history):
     plt.plot(epochs, val_loss)
     plt.title('Training and validation loss')
     plt.show()
+
+def trainVGG_PV(train_url,val_url):
+    ## Set Variables##
+    nro_class = 3
+    epochs = 15
+    batch_size = 64
+    ## Set Variables##
+    orchester, nro_train = loadPVDatasets(train_url,val_url,nro_class)
+    print(nro_train)
+
+    trainGenerator = orchester.getTrainDataset()
+    testGenerator = orchester.getValDataset()
+
+    VGG16_Builder = ModelBuilder(dataset_train=trainGenerator,dataset_val= testGenerator,nro_classes= nro_class,arquitecture="VGG-16")
+    VGG16_PV = VGG16_Builder.getModel()
+    print(VGG16_PV.summary())
+
+    ## Definir parametros de entrenamiento
+    lr = 0
+    epochs = 5
+    #lr=4e-1
+    if (lr == 0):
+        print (" BUSCAR LR")
+        return 0
+    cycle_callback=get1CycleCallback(epochs, train_number, lr_max=lr)
+
+    optimizer = tf.keras.optimizers.RMSprop(learning_rate=lr)
+    VGG16_PV.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
+
+    ##Entrenar el Modelo
+    history = VGG16_PV.fit(trainGenerator,
+                        callbacks=[lr_finder],
+                        validation_data=testGenerator,
+                        steps_per_epoch=100,
+                        epochs=epochs,
+                        validation_steps=50,
+                        verbose=1)
+
+    return VGG16_PV,history
+
+def loadPVDatasets(train_url,val_url,nro_class):
+    orchester = DatasetOrchester(nro_class, val_url, train_url)
+    train_number = orchester.getTrainNumber()
+    return orchester, train_number
+
+def loadVGGModel(datasetOrchester,nro_class):
+    trainGenerator = datasetOrchester.getTrainDataset()
+    testGenerator = datasetOrchester.getValDataset()
+
+    VGG16_Builder = ModelBuilder(dataset_train=trainGenerator,
+                                 dataset_val=testGenerator,
+                                 nro_classes=nro_class,
+                                 arquitecture="VGG-16")
+
+    VGG16_PV = VGG16_Builder.getModel()
+    print(VGG16_PV.summary())
+
+def loadTestDataset():
+    fashion_mnist = tf.keras.datasets.fashion_mnist
+    (x_train, y_train), (x_valid, y_valid) = fashion_mnist.load_data()
+    x_train, x_valid = x_train / 255.0, x_valid / 255.0
+
+    x_train = x_train[..., tf.newaxis]
+    x_valid = x_valid[..., tf.newaxis]
+
+    train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train)).shuffle(10000).batch(32)
+    valid_ds = tf.data.Dataset.from_tensor_slices((x_valid, y_valid)).batch(32)
+
+    return train_ds, valid_ds
 
 if __name__ == '__main__':
 

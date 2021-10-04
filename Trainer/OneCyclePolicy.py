@@ -34,8 +34,7 @@ class LRFinder(Callback):
     def on_train_batch_end(self, batch, logs=None):
         logs = logs or {}
         loss = logs.get('loss')
-        acc= logs.get('accuracy')
-        print(acc)
+        acc = logs.get('accuracy')
         step = self.step
         ##Registramos Loss
         if loss:
@@ -46,8 +45,6 @@ class LRFinder(Callback):
             if step == 0 or loss < self.best_loss:
                 self.best_loss = loss
         ##Registramos Accuracy
-        ## ¡Donde esta Accuracy en este log? parece que no hay.
-        ## Computamos a base de loss
         if acc:
             self.avg_acc = self.smoothing * self.avg_acc + (1 - self.smoothing) * acc
             smooth_acc = self.avg_acc / (1 - self.smoothing ** (self.step + 1))

@@ -11,24 +11,23 @@ class ModelBuilder:
         self.dataset_train = dataset_train
         self.nro_classes = nro_classes
         self.dataset_val = dataset_val
-        self.epochs = 0
+
         importer = ModelImporter()
         if arquitecture == "VGG-16":
             model = importer.getVGG16ForTransferLearning(nro_classes)
 
-        self.loadLRange(model)
-
-        self.model = model
+        self.model=model
+        return self.model
 
 
     def getModel(self):
         return self.model
 
-    def loadLRange(self,model):
+    def loadLRange(self):
         lr_finder = LRFinder()
 
-        model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-        model.fit(self.dataset_train, epochs=10, callbacks=[lr_finder], verbose=False)
+        self.model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+        self.model.fit(self.dataset_train, epochs=10, callbacks=[lr_finder], verbose=False)
         lr_finder.plot_loss()
         lr_finder.plot_accuracy()
 
@@ -41,11 +40,9 @@ class ModelImporter:
     ## Input Shape = 224 Default
     ## top = 3 FC Layers
 
-    #Top: Incluir las 3 layers primeras
-    #pooling: None / avg / max
+    #Pooling: None / Avg / max
     def loadVGGImageNet(self,pooling=None,top=False):
-        model = tf.keras.applications.\
-            vgg16.VGG16(
+        model = tf.keras.applications.vgg16.VGG16(
             include_top=top,
             weights='imagenet',
             pooling = pooling
@@ -54,8 +51,7 @@ class ModelImporter:
         return model
 
     def loadVGGEmpty(self,classes):
-        model = tf.keras.applications. \
-            vgg16.VGG16(
+        model = tf.keras.applications.vgg16.VGG16(
             include_top=True,
             weights=None,
             classes=classes
@@ -63,20 +59,53 @@ class ModelImporter:
 
         return model
 
+    def loadResNetImageNet(self,pooling=None,top=False,size=224):
+        model = tf.keras.applications.resnet50.ResNet50(
+            input_shape=(size,size,3),
+            pooling=pooling,
+            include_top=top)
+        return model
+
     def loadFrozenVGG(self):
         model = self.loadVGGImageNet()
         model.trainable = False
         return model
 
+    def loadFrozenResNet50(self):
+        model = self.loadResNetImageNet()
+        model.trainable=False
+        return model
+
     def getVGG16ForTransferLearning(self,nClasses):
         base_model = self.loadFrozenVGG()
+        top_layers = self.createVGG16Top()
 
         inputs = tf.keras.Input(shape=(224, 224, 3))
-        x = base_model(inputs, training=False)
-        x = tf.keras.layers.Dense(4092, activation='relu')(x)
-        x = tf.keras.layers.Dense(4092, activation='relu')(x)
-        x = tf.keras.layers.GlobalAveragePooling2D()(x)
+        x=tf.keras.applications.vgg16.preprocess_input(inputs)
+        x = base_model(x, training=False)
+        x = top_layers(x)
         outputs = tf.keras.layers.Dense(nClasses,activation='sigmoid')(x)
+        model = tf.keras.Model(inputs, outputs)
+        return model
+
+    def createVGG16TopLayers(self):
+        x = tf.keras.layers.GlobalAveragePooling2D()
+        x = tf.keras.layers.Dense(4092, activation='relu')(x)
+        x = tf.keras.layers.Dense(4092, activation='relu')(x)
+        return x
+
+    def getResNet50ForTransferLearning(self,nClasses):
+        base_model = self.loadFrozenResNet50()
+        inputs = tf.keras.Input(shape=(224, 224, 3))
+
+        x = tf.keras.applications.resnet50.preprocess_input(inputs)
+        x = base_model(x, training=False)
+        x = tf.keras.layers.GlobalAveragePooling2D()(x)
+        # x = Dropout(0.7,seed=seed_value)(x)
+        x = tf.keras.layers.Dense(4092, activation='relu')(x)
+        x = tf.keras.layers.Dense(4092, activation='relu')(x)
+
+        outputs = tf.keras.layers.Dense(nClasses, activation='sigmoid')(x)
         model = tf.keras.Model(inputs, outputs)
         return model
 

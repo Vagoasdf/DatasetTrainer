@@ -13,51 +13,56 @@ PLANTPATHOLOGY_ORDERED = "../Datasets/PlantPathology-order-dataset/images/train"
 
 class DatasetOrchester:
 
-    def __init__(self, nro_clases,url_validacion,url_entrenamiento):
+    def __init__(self, nro_clases,url_validacion,url_entrenamiento,batch_size=64):
+        self.target_size = None
+        self.batch_size = batch_size
         self.nro_clases = nro_clases
         generator =  DatasetGenerator()
-        self.train_dataset = generator.loadTrainDataset( dataset_dir=url_entrenamiento)
-        self.val_dataset = generator.loadValidationDataset( dataset_dir= url_validacion)
+        self.train_dataset = generator.loadTrainDataset( url_entrenamiento, batch_size)
+        self.val_dataset = generator.loadValidationDataset( url_validacion, batch_size)
 
+    ##setters
 
+    def setBatchSize(self,batch):
+        self.batch_size = batch
 
-        #TODO:   Validar que tengan la misma cantidad de clases
-        #self.nro_train = DatasetGenerator.getTrainDatasetCount()
-        #self.nro_val = DatasetGenerator.getTrainDatasetCount()
-
+    def setTargetSize(self,target_px):
+        self.target_size = target_px
     #Getters
     def getTrainDataset(self):
         return self.train_dataset
 
     def getTrainAmount(self):
-
         return  self.train_dataset.__len__
 
     def getValDataset(self):
         return self.val_dataset
 
     def getValAmount(self):
-        return self.nro_val
+        return self.val_dataset.__len__
 
-
+    ## Funciones
+    def createTestDataset(self,url, target_size=None,batch_size=None):
+        if(batch_size==None):  batch_size = self.batch_size
+        if(target_size==None):  target_size = self.target_size
+        testDataset = self.generator.buildSimpleDataset(url, target_size, batch_size)
+        return testDataset
 
 class DatasetGenerator:
 
-    def loadTrainDataset(self,dataset_dir,model_architecture="VGG"):
+    def loadTrainDataset(self,dataset_dir, batch_size, model_architecture="VGG"):
         if(model_architecture == "VGG"):
-            target_size=224
-            batch_size=20
-            TrainDataset = self.buildAgumentedDataset(dataset_dir,target_size,batch_size)
+            target_size = 224
+            TrainDataset = self.buildAgumentedDataset(dataset_dir, target_size, batch_size)
         else:
             print("Arquitectura no reconocida")
             pass
 
         return TrainDataset
 
-    def loadValidationDataset(self, dataset_dir, model_architecture="VGG"):
+    def loadValidationDataset(self, dataset_dir, batch_size, model_architecture="VGG"):
         if (model_architecture == "VGG"):
             target_size = 224
-            batch_size = 20
             ValDataset = self.buildSimpleDataset(dataset_dir, target_size, batch_size)
         else:
             print("Arquitectura no reconocida")
@@ -94,21 +99,5 @@ class DatasetGenerator:
             class_mode='categorical',
             target_size=(target_size, target_size))
         return dataset
-
-
-    ## TODO. ¿que onda class names?
-    def showTrainImages(self,dataset,nImages):
-        class_names=["AAAAA"]
-        plt.figure(figsize=(10, 10))
-        for images, labels in dataset.take(1):
-            for i in range(nImages):
-                ax = plt.subplot(3, 3, i + 1)
-                plt.imshow(images[i].numpy().astype("uint8"))
-                plt.title(class_names[labels[i]])
-                plt.axis("off")
-
-
-
-
 
 
