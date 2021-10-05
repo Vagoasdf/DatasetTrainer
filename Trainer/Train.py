@@ -10,6 +10,8 @@
 ### Decidir HiperParámetros
 
 ### Importar los datasets
+import os.path
+
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
@@ -31,6 +33,16 @@ def get1CycleCallback(epochs, batch_size,train_number,lr_max):
     steps = np.ceil(train_number/batch_size)*epochs
     lr_schedule = OneCycleScheduler(lr_max=lr_max,steps=steps)
     return lr_schedule
+
+def getCheckpointCallback(checkpoint_url = 'training_1/cp.ckpt'):
+    checkpoint_dir = os.path.dirname(checkpoint_url)
+    cp_best_callback = tf.keras.callbacks.ModelCheckpoint(
+        checkpoint_url,
+        save_weights_only=True,
+        save_best_only=True,
+        monitor='val_loss',
+        verbose=1)
+    return cp_best_callback
 
 def evaluateModel(history):
     # -----------------------------------------------------------
@@ -66,41 +78,43 @@ def trainVGG_PV(train_url,val_url):
     epochs = 15
     batch_size = 64
     ## Set Variables##
-    orchester, nro_train = loadPVDatasets(train_url,val_url,nro_class)
+    ##Cargar VGG builder
+    orchester, nro_train = loadPVDatasets(train_url,val_url,nro_class,batch_size)
     print(nro_train)
-
-    trainGenerator = orchester.getTrainDataset()
-    testGenerator = orchester.getValDataset()
-
-    VGG16_Builder = ModelBuilder(dataset_train=trainGenerator,dataset_val= testGenerator,nro_classes= nro_class,arquitecture="VGG-16")
+    VGG16_Builder = loadVGGModel(orchester,nro_class)
     VGG16_PV = VGG16_Builder.getModel()
-    print(VGG16_PV.summary())
+    VGG16_Builder.loadLRange()
+    ##Cargar VGG Builder
 
     ## Definir parametros de entrenamiento
     lr = 0
-    epochs = 5
     #lr=4e-1
     if (lr == 0):
         print (" BUSCAR LR")
         return 0
-    cycle_callback=get1CycleCallback(epochs, train_number, lr_max=lr)
+
+    cycle_callback=get1CycleCallback(epochs, batch_size, nro_train, lr_max=lr)
+    best_callback = getCheckpointCallback()
 
     optimizer = tf.keras.optimizers.RMSprop(learning_rate=lr)
-    VGG16_PV.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
+    VGG16_PV.compile(optimizer=optimizer,
+                     loss='categorical_crossentropy',
+                     metrics=['accuracy'])
 
+    trainGenerator = orchester.getTrainDataset()
+    testGenerator = orchester.getValDataset()
     ##Entrenar el Modelo
-    history = VGG16_PV.fit(trainGenerator,
-                        callbacks=[lr_finder],
-                        validation_data=testGenerator,
-                        steps_per_epoch=100,
-                        epochs=epochs,
-                        validation_steps=50,
-                        verbose=1)
+    history = VGG16_PV.fit(
+        trainGenerator,
+        validation_data=testGenerator,
+        callbacks=[cycle_callback,best_callback],
+        epochs=epochs,
+        verbose=1)
 
     return VGG16_PV,history
 
-def loadPVDatasets(train_url,val_url,nro_class):
-    orchester = DatasetOrchester(nro_class, val_url, train_url)
+def loadPVDatasets(train_url,val_url,nro_class,batch_size):
+    orchester = DatasetOrchester(nro_class, val_url, train_url,batch_size)
     train_number = orchester.getTrainNumber()
     return orchester, train_number
 
@@ -112,9 +126,16 @@ def loadVGGModel(datasetOrchester,nro_class):
                                  dataset_val=testGenerator,
                                  nro_classes=nro_class,
                                  arquitecture="VGG-16")
+    return VGG16_Builder
 
-    VGG16_PV = VGG16_Builder.getModel()
-    print(VGG16_PV.summary())
+def saveModel(model,filename,final_path):
+    final_dir = os.path.dirname(final_path)
+    model.save('./'+final_path+'/'+filename+'.h5')
+
+def saveCheckpoint(model,filename,final_path):
+    final_dir = os.path.dirname(final_path)
+    model.save_weights('./'+final_path+'/'+filename)
+
 
 def loadTestDataset():
     fashion_mnist = tf.keras.datasets.fashion_mnist
@@ -134,5 +155,8 @@ if __name__ == '__main__':
     train_url = "../Datasets/PlantVillage/apple"
     val_url = "../Datasets/PlantVillage/apple"
 
-    trainVGG_PV(train_url,val_url)
-
+    VGG_model, history = trainVGG_PV(train_url,val_url)
+    evaluateModel(history)
+    final_path = 'training_output'
+    saveModel(VGG_model,"VGG-16",final_path)
+    saveCheckpoint(VGG_model,"VGG-16",final_path)
