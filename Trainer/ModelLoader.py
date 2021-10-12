@@ -78,12 +78,14 @@ class ModelImporter:
 
     def getVGG16ForTransferLearning(self,nClasses):
         base_model = self.loadFrozenVGG()
-        top_layers = self.createVGG16Top()
 
         inputs = tf.keras.Input(shape=(224, 224, 3))
         x=tf.keras.applications.vgg16.preprocess_input(inputs)
-        x = base_model(x, training=False)
-        x = top_layers(x)
+
+        x = base_model(inputs, training=False)
+        x = tf.keras.layers.GlobalAveragePooling2D()(x)
+        x = tf.keras.layers.Dense(4092, activation='relu')(x)
+        x = tf.keras.layers.Dense(4092, activation='relu')(x)
         outputs = tf.keras.layers.Dense(nClasses,activation='sigmoid')(x)
         model = tf.keras.Model(inputs, outputs)
         return model
@@ -102,7 +104,7 @@ class ModelImporter:
         x = base_model(x, training=False)
         x = tf.keras.layers.GlobalAveragePooling2D()(x)
         # x = Dropout(0.7,seed=seed_value)(x)
-        x = tf.keras.layers.Dense(4092, activation='relu')(x)
+        x = tf.keras.layer s.Dense(4092, activation='relu')(x)
         x = tf.keras.layers.Dense(4092, activation='relu')(x)
 
         outputs = tf.keras.layers.Dense(nClasses, activation='sigmoid')(x)

@@ -20,6 +20,25 @@ from DatasetTrainer.Trainer.DatasetLoader import DatasetOrchester
 from DatasetTrainer.Trainer.ModelLoader import ModelBuilder
 from DatasetTrainer.Trainer.OneCyclePolicy import LRFinder, OneCycleScheduler
 
+
+def seedRandomness():
+    #  La semilla garantiza que los números aleatorios sean símilares entre ejemplos
+    # Dificil que dos ejemplos den lo mismo, pero bueno que en varias ocasiones de similar.
+
+    seed_value = 612
+
+    # 1. Set 'os'  hash Seed for enviroment at a fixed value
+    os.environ['PYTHONHASHSEED'] = str(seed_value)
+    # 2. Set `python` built-in pseudo-random generator at a fixed value
+    import random
+    random.seed(seed_value)
+    # 3. Set `numpy` pseudo-random generator at a fixed value
+    np.random.seed(seed_value)
+    # 4. Set `tensorflow` pseudo-random generator at a fixed value
+    tf.random.set_seed(seed_value)
+    ## 5. For layers that introduce randomness like dropout, make sure to set seed values
+    ##model.add(Dropout(0.25, seed=seed_value))
+    0
 def testLRFinder(dataset,model):
 
     lr_finder = LRFinder()
