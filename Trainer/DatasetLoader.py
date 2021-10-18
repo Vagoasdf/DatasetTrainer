@@ -30,6 +30,7 @@ class DatasetOrchester:
 
     def setTargetSize(self,target_px):
         self.target_size = target_px
+
     #Getters
     def getTrainDataset(self):
         return self.train_dataset
@@ -61,55 +62,8 @@ class DatasetOrchester:
     def createTestDataset(self,url, batch_size,target_size=None):
 
         if(target_size==None):  target_size = self.target_size
-        self.testDataset = self.generator.buildSimpleDataset(url, target_size, batch_size)
+        self.testDataset = self.generator.buildSimpleDataset(url,batch_size,target_size)
         return self.testDataset
-
-    def createValSplitDataset(self,url,batch_size=32,val_split=0.2,target_size=None):
-        if (target_size == None):  target_size = self.target_size
-        if (target_size == None):
-            print("Necesita indicar tamaño deseado")
-            pass
-
-        base_ds,labels=self.generator.loadDatasetAsListFiles(url,target_size)
-        self.labels = labels
-        train_ds, val_ds = self.split_dataset(base_ds, val_split,val_split=True)
-
-        self.train_dataset = self.generator.configure_batches(train_ds,batch_size)
-        self.val_dataset = self.generator.configure_batches(val_ds,batch_size)
-
-        return self.train_dataset, self.val_dataset
-
-    def split_dataset(self, base_ds, pct_split,val_split=False):
-        img_count = base_ds.__len__
-        split_size = int(img_count * pct_split)
-        train_ds = base_ds.skip(split_size, seed=self.seed)
-        if(val_split):
-            val_ds = base_ds.take(split_size, seed=self.seed)
-            return train_ds, val_ds
-        return train_ds
-
-    def combineDatasetsFromDirectory(self,dataset1_url,dataset2_url,dataset1_pct=1,dataset2_pct=0.5):
-
-
-        first_dataset, first_labels= self.generator.loadDatasetAsListFiles(dataset1_url,self.target_size)
-        second_dataset, second_labels = self.generator.loadDatasetAsListFiles(dataset2_url, self.target_size)
-
-        def_labels = first_labels
-        if(first_labels != second_labels):
-            print(first_labels)
-            print(second_labels)
-            if( first_labels.__len__ != second_labels.__len__):
-                print("labels con distinto tamaño? No, pasamos.")
-                pass
-            print("Quedandonos por default con first_labels")
-            def_labels = first_labels
-
-        first_ds = self.split_dataset(first_dataset,dataset1_pct)
-        second_ds = self.split_dataset(second_dataset, dataset2_pct)
-        compiled_ds = first_ds.concatenate(second_ds)
-
-        batched_ds = self.generator.configure_batches(compiled_ds,self.batch_size)
-        return batched_ds, def_labels
 
     def show(self,image, label):
         plt.figure()
@@ -133,20 +87,20 @@ class DatasetGenerator:
     def __init__(self):
         self.class_names = None
 
-    def loadTrainDataset(self,dataset_dir, batch_size, model_architecture="VGG"):
+    def loadTrainDataset(self,dataset_dir, batch_size, target_size=None, model_architecture="VGG"):
         if(model_architecture == "VGG"):
-            target_size = 224
-            TrainDataset = self.buildAgumentedDataset(dataset_dir, target_size, batch_size)
+            if(target_size == None) :  target_size = 224
+            TrainDataset = self.buildAgumentedDataset(dataset_dir, batch_size,target_size)
         else:
             print("Arquitectura no reconocida")
             pass
 
         return TrainDataset
 
-    def loadValidationDataset(self, dataset_dir, batch_size, model_architecture="VGG"):
+    def loadValidationDataset(self, dataset_dir, batch_size, target_size = None, model_architecture="VGG"):
         if (model_architecture == "VGG"):
-            target_size = 224
-            ValDataset = self.buildSimpleDataset(dataset_dir, target_size, batch_size)
+            if (target_size == None):  target_size = 224
+            ValDataset = self.buildSimpleDataset(dataset_dir,batch_size, target_size, )
         else:
             print("Arquitectura no reconocida")
             pass
@@ -154,7 +108,7 @@ class DatasetGenerator:
         return ValDataset
 
     # Crea un image generator sencillo, sin transformaciones
-    def buildSimpleDataset(self, datagen_dir, target_size, batch_size):
+    def buildSimpleDataset(self, datagen_dir, batch_size,target_size):
         datagen = ImageDataGenerator(rescale=1 / 255.) # Convierte de 1-255 a 0 - 1
         dataset = datagen.flow_from_directory(
             datagen_dir,
@@ -163,7 +117,31 @@ class DatasetGenerator:
             target_size=(target_size, target_size))
         return dataset
 
+    # Crea un image generator con transformaciones variadas.
+    def buildAgumentedDataset(self, datagen_dir, batch_size,target_size):
 
+        datagen = ImageDataGenerator(
+            rescale=1. / 255, # Convierte de 1-255 a 0 - 1
+            rotation_range=40,
+            width_shift_range=0.2,
+            height_shift_range=0.2,
+            shear_range=0.2,
+            zoom_range=0.2,
+            horizontal_flip=True,
+            fill_mode='nearest')
+
+        dataset = datagen.flow_from_directory(
+            datagen_dir,
+            batch_size=batch_size,
+            class_mode='categorical',
+            target_size=(target_size, target_size))
+        return dataset
+
+    """
+    Intento de uso en Pipelines. No funcionó como esperaba, pero si sirve
+    para cargar la base de un dataset. Deprecado porque flow_from_directory es mucho mejor
+    y ya podemos recombinar y separar con Separator
+    """
     def loadDatasetAsListFiles(self,dataset_url,target_size):
         dataset_dir = pathlib.Path(dataset_url)
         image_count = len(list(dataset_dir.glob('*/*.jpg')))
@@ -233,26 +211,6 @@ class DatasetGenerator:
             print(images.dtype, images.shape)
             print(labels.dtype, labels.shape)
         #
-
-    # Crea un image generator con transformaciones variadas.
-    def buildAgumentedDataset(self, datagen_dir, target_size, batch_size):
-
-        datagen = ImageDataGenerator(
-            rescale=1. / 255, # Convierte de 1-255 a 0 - 1
-            rotation_range=40,
-            width_shift_range=0.2,
-            height_shift_range=0.2,
-            shear_range=0.2,
-            zoom_range=0.2,
-            horizontal_flip=True,
-            fill_mode='nearest')
-
-        dataset = datagen.flow_from_directory(
-            datagen_dir,
-            batch_size=batch_size,
-            class_mode='categorical',
-            target_size=(target_size, target_size))
-        return dataset
 
     def seeImagesInDataset(self,dataset):
 

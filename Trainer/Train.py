@@ -14,11 +14,15 @@ import os.path
 
 import numpy as np
 import tensorflow as tf
-import matplotlib.pyplot as plt
-
 from DatasetTrainer.Trainer.DatasetLoader import DatasetOrchester
 from DatasetTrainer.Trainer.ModelLoader import ModelBuilder
 from DatasetTrainer.Trainer.OneCyclePolicy import LRFinder, OneCycleScheduler
+from sklearn.utils import class_weight
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import seaborn as sns
+from tensorflow.math import confusion_matrix
+
 
 
 def seedRandomness():
@@ -39,6 +43,7 @@ def seedRandomness():
     ## 5. For layers that introduce randomness like dropout, make sure to set seed values
     ##model.add(Dropout(0.25, seed=seed_value))
     0
+
 def testLRFinder(dataset,model):
 
     lr_finder = LRFinder()
@@ -54,7 +59,7 @@ def get1CycleCallback(epochs, batch_size,train_number,lr_max):
     return lr_schedule
 
 def getCheckpointCallback(checkpoint_url = 'training_1/cp.ckpt'):
-    checkpoint_dir = os.path.dirname(checkpoint_url)
+    os.path.dirname(checkpoint_url)
     cp_best_callback = tf.keras.callbacks.ModelCheckpoint(
         checkpoint_url,
         save_weights_only=True,
@@ -63,33 +68,16 @@ def getCheckpointCallback(checkpoint_url = 'training_1/cp.ckpt'):
         verbose=1)
     return cp_best_callback
 
-def evaluateModel(history):
-    # -----------------------------------------------------------
-    # Retrieve a list of list results on training and test data
-    # sets for each training epoch
-    # -----------------------------------------------------------
-    acc = history.history['accuracy']
-    val_acc = history.history['val_accuracy']
-    loss = history.history['loss']
-    val_loss = history.history['val_loss']
+def getClassWeights(trainDataset):
+    ## So : acá podría estar el re-Balanceador
 
-    epochs = range(len(acc))  # Get number of epochs
-
-    # ------------------------------------------------
-    # Plot training and validation accuracy per epoch
-    # ------------------------------------------------
-    plt.plot(epochs, acc)
-    plt.plot(epochs, val_acc)
-    plt.title('Training and validation accuracy')
-    plt.figure()
-
-    # ------------------------------------------------
-    # Plot training and validation loss per epoch
-    # ------------------------------------------------
-    plt.plot(epochs, loss)
-    plt.plot(epochs, val_loss)
-    plt.title('Training and validation loss')
-    plt.show()
+    class_weights = class_weight.compute_class_weight(
+               'balanced',
+                np.unique(trainDataset.classes),
+                trainDataset.classes)
+    #pasarlas a dict
+    class_weights = {i : class_weights[i] for i in range(3)}
+    return class_weights
 
 def trainVGG_PV(train_url,val_url):
     ## Set Variables##
@@ -155,7 +143,6 @@ def saveCheckpoint(model,filename,final_path):
     final_dir = os.path.dirname(final_path)
     model.save_weights('./'+final_path+'/'+filename)
 
-
 def loadTestDataset():
     fashion_mnist = tf.keras.datasets.fashion_mnist
     (x_train, y_train), (x_valid, y_valid) = fashion_mnist.load_data()
@@ -169,13 +156,3 @@ def loadTestDataset():
 
     return train_ds, valid_ds
 
-if __name__ == '__main__':
-
-    train_url = "../Datasets/PlantVillage/apple"
-    val_url = "../Datasets/PlantVillage/apple"
-
-    VGG_model, history = trainVGG_PV(train_url,val_url)
-    evaluateModel(history)
-    final_path = 'training_output'
-    saveModel(VGG_model,"VGG-16",final_path)
-    saveCheckpoint(VGG_model,"VGG-16",final_path)

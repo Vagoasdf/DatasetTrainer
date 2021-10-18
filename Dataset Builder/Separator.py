@@ -36,7 +36,7 @@ class Separator:
         splitfolders.ratio(self.currentDataset, output=output_url, seed=self.seed, ratio=ratio,
                            group_prefix=None)  # default values
 
-    def splitImageDatasetByNumber(self,output_url,val_number,test_number=None):
+    def splitImageDatasetByNumber(self,output_url,val_number,test_number=None,oversample=True):
         # Split val/test with a fixed number of items e.g. 100 for each set.
         if(self.currentDataset == None):
             print("No hay un dataset actualmente")
@@ -47,7 +47,7 @@ class Separator:
             fixed_val = (val_number,test_number)
 
         splitfolders.fixed(self.currentDataset, output=output_url, seed=self.seed, fixed=fixed_val,
-                           oversample=False,group_prefix=None)  # default values
+                           oversample=oversample,group_prefix=None)  # default values
 
 
 class Joiner:
@@ -115,14 +115,25 @@ def separatePPC(sep,targetDir,quality=None):
 
     sep.setImageDataset(basicPPCSegmented)
     sep.splitImageDatasetByNumber(targetDir,
-                                  val_number=100,
-                                  test_number=30)
+                                  val_number=50,
+                                  test_number=30,
+                                  oversample=False),
 
 
 def separatePV(sep,targetDir):
     basicPVSegmented="../Datasets/Apples to Apples/CompareApplesPVPPC/PV Segmented Apple"
     sep.setImageDataset(basicPVSegmented)
-    sep.splitImageDatasetWithRatio(targetDir)
+    sep.splitImageDatasetByNumber(targetDir,
+                                  val_number=70,
+                                  test_number=50)
+
+def SeparateBalancedPV(sep,targetDir):
+    basicPVSegmented="../Datasets/Apples to Apples/CompareApplesPVPPC/PV Balanced Apple"
+    sep.setImageDataset(basicPVSegmented)
+    ##Veremos que onda el oversampling. Rust tiene como 300 nomas.
+
+    sep.splitImageDatasetByNumber(targetDir,
+                                  val_number=200)
 
 
 if __name__ == '__main__':
@@ -131,12 +142,15 @@ if __name__ == '__main__':
     targetDirPV="../Datasets/PV-Segmentada"
 
     sep = Separator()
-    separatePPC(sep, targetPPCgood, quality="good")
+    #print("PPC")
+    #separatePPC(sep, targetPPCgood, quality="good")
     #separatePPC(sep, targetPPCMed, quality="ok")
-    separatePV(sep,targetDirPV)
+    #print("PV")
+    #separatePV(sep,targetDirPV)
+    ##Pausa para Re- Armar los train y test de cada PPC
 
     join = Joiner()
-    targetJoinDir="../Datasets/MixedSegmented"
+    targetJoinDir="../Datasets/QualitySegmentedMixed"
     join.joinTwoDatasets(targetDirPV,targetPPCgood,targetJoinDir)
-    #join.CopyDatasetIntoTarget(targetPPCMed,targetJoinDir)
+    join.CopyDatasetIntoTarget(targetPPCMed,targetJoinDir)
 

@@ -43,7 +43,7 @@ class LRFinder(Callback):
             self.losses.append(smooth_loss)
 
             if step == 0 or loss < self.best_loss:
-                self.best_loss = loss
+                self.best_loss = smooth_loss
         ##Registramos Accuracy
         if acc:
             self.avg_acc = self.smoothing * self.avg_acc + (1 - self.smoothing) * acc
@@ -51,7 +51,7 @@ class LRFinder(Callback):
             self.accuracies.append(smooth_acc)
 
             if step == 0 or acc < self.best_acc:
-                self.best_acc = acc
+                self.best_acc = smooth_acc
 
         self.lrs.append(self.lr)
 
@@ -82,6 +82,21 @@ class LRFinder(Callback):
         ax.xaxis.set_major_formatter(plt.FormatStrFormatter('%.0e'))
         ax.plot(self.lrs, self.accuracies)
         plt.show()
+
+    def get_best_acc_lr(self):
+
+        print("Best acc:" + str(self.best_acc))
+        best_index = self.accuracies.index(self.best_acc)
+        best_lr = self.lrs[best_index]
+        print(best_lr)
+        return best_lr
+
+    def get_best_loss_lr(self):
+        print("Best Loss: " + str(self.best_loss))
+        best_index = self.losses.index(self.best_loss)
+        best_lr = self.lrs[best_index]
+        print(best_lr)
+        return best_lr
 
 ##Ciclo basado en Cosine en vez de step directo
 ##basado en : https://www.avanwyk.com/tensorflow-2-super-convergence-with-the-1cycle-policy/
