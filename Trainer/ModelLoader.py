@@ -148,14 +148,15 @@ class ModelBuilder:
 
     def getLR(self,model):
         lr_acc, lr_loss = self.loadLRange(model)
-        if (lr_acc > 1e-7):
+        if (1 > lr_acc > 1e-5):
             lr = lr_acc
-        elif (lr_loss < 1):
+        elif (1e-5< lr_loss < 1):
             lr = lr_loss
         else:
             lr = 1e-3
 
         return lr
+
 
 
 class ModelImporter:
