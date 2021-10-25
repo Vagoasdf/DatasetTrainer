@@ -14,15 +14,22 @@ import os.path
 
 import numpy as np
 import tensorflow as tf
+from sklearn.utils import class_weight
 from DatasetTrainer.Trainer.DatasetLoader import DatasetOrchester
 from DatasetTrainer.Trainer.ModelLoader import ModelBuilder
 from DatasetTrainer.Trainer.OneCyclePolicy import LRFinder, OneCycleScheduler
-from sklearn.utils import class_weight
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import seaborn as sns
-from tensorflow.math import confusion_matrix
 
+METRICS = [
+    tf.keras.metrics.TruePositives(name='tp'),
+    tf.keras.metrics.FalsePositives(name='fp'),
+    tf.keras.metrics.TrueNegatives(name='tn'),
+    tf.keras.metrics.FalseNegatives(name='fn'),
+    tf.keras.metrics.BinaryAccuracy(name='accuracy'),
+    tf.keras.metrics.Precision(name='precision'),
+    tf.keras.metrics.Recall(name='recall'),
+    tf.keras.metrics.AUC(name='auc'),
+    tf.keras.metrics.AUC(name='prc', curve='PR'), # precision-recall curve
+]
 
 
 def seedRandomness():
@@ -44,14 +51,121 @@ def seedRandomness():
     ##model.add(Dropout(0.25, seed=seed_value))
     0
 
-def testLRFinder(dataset,model):
+## CNN Train con Class Weights y CLR
 
-    lr_finder = LRFinder()
+def complete_cnn_train(train_dataset, val_dataset,cnn_builder,batch_size, cnn_lr=None):
+    ## Base Hiperparameters
+    cnn = cnn_builder.getModel()
+    train_number = train_dataset.samples
+    if( cnn_lr == None): cnn_lr = cnn_builder.getLR(cnn)
+    cnn_epochs = 20
+    ##Create 1CLR
+    cnn_cycle = get1CycleCallback(cnn_epochs,
+                                  batch_size,
+                                  train_number,
+                                  lr_max=cnn_lr)
 
-    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy',metrics=['accuracy'])
-    model.fit(dataset,epochs=10,callbacks=[lr_finder],verbose=False)
-    lr_finder.plot_loss()
-    lr_finder.plot_accuracy()
+    ##Crear CWeights
+    class_weights = getClassWeights(train_dataset)
+
+    # Crear checkpoints de entrenamiento
+    checkpoint_path = "training_tf/cp.ckpt"
+    cp_callback = getCheckpointCallback(checkpoint_path)
+
+    optimizer = tf.keras.optimizers.Adam(learning_rate=cnn_lr)
+    cnn.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=METRICS)
+    cnn_history = cnn.fit(train_dataset,
+                          validation_data = val_dataset,
+                          callbacks=[cp_callback,cnn_cycle],
+                          epochs = cnn_epochs,
+                          class_weight=class_weights,
+                          verbose = 1,)
+
+    return cnn, cnn_history
+
+##CNN train sin CLR,
+def fixed_cnn_train(train_dataset, val_dataset, cnn_builder, cnn_lr=None):
+    ## Base Hiperparameters
+    cnn = cnn_builder.getModel()
+    if( cnn_lr == None): cnn_lr = cnn_builder.getLR(cnn)
+    cnn_epochs = 20
+
+    ##Crear CWeights
+    class_weights = getClassWeights(train_dataset)
+
+    # Crear checkpoints de entrenamiento
+    checkpoint_path = "training_tf/cp.ckpt"
+    cp_callback = getCheckpointCallback(checkpoint_path)
+
+    optimizer = tf.keras.optimizers.Adam(learning_rate=cnn_lr)
+    cnn.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=METRICS)
+    cnn_history = cnn.fit(train_dataset,
+                          validation_data=val_dataset,
+                          callbacks=[cp_callback],
+                          epochs=cnn_epochs,
+                          class_weight=class_weights,
+                          verbose=1, )
+
+    return cnn, cnn_history
+
+## CNN train sin CW
+def balanced_cnn_train(train_dataset, val_dataset, cnn_builder, batch_size, cnn_lr=None):
+    ## Base Hiperparameters
+    cnn = cnn_builder.getModel()
+    train_number = train_dataset.samples
+    if( cnn_lr == None): cnn_lr = cnn_builder.getLR(cnn)
+    cnn_epochs = 20
+    ##Create 1CLR
+    cnn_cycle = get1CycleCallback(cnn_epochs,
+                                  batch_size,
+                                  train_number,
+                                  lr_max=cnn_lr)
+    # Crear checkpoints de entrenamiento
+    checkpoint_path = "training_tf/cp.ckpt"
+    cp_callback = getCheckpointCallback(checkpoint_path)
+
+    optimizer = tf.keras.optimizers.Adam(learning_rate=cnn_lr)
+    cnn.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=METRICS)
+    cnn_history = cnn.fit(train_dataset,
+                          validation_data = val_dataset,
+                          callbacks=[cp_callback,cnn_cycle],
+                          epochs = cnn_epochs,
+                          verbose = 1)
+    return cnn, cnn_history
+
+## Entrenamiento básico, sin nada especial.
+def basic_cnn_train(train_dataset, val_dataset, cnn_builder,cnn_lr=1e-3):
+    cnn = cnn_builder.getModel()
+    train_number = train_dataset.samples
+    cnn_epochs = 20
+
+    # Crear checkpoints de entrenamiento
+    checkpoint_path = "training_tf/cp.ckpt"
+    cp_callback = getCheckpointCallback(checkpoint_path)
+
+    optimizer = tf.keras.optimizers.Adam(learning_rate=cnn_lr)
+    cnn.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=METRICS)
+    cnn_history = cnn.fit(train_dataset,
+                          validation_data = val_dataset,
+                          callbacks=[cp_callback],
+                          epochs = cnn_epochs,
+                          verbose = 1)
+    return cnn, cnn_history
+
+def cnn_finetune(modelBuilder,finetune_lr,train_dataset,val_dataset):
+    epochs = 5
+    finetune_optimizer = tf.keras.optimizers.RMSprop(learning_rate=finetune_lr)
+    model = modelBuilder.setModelToFineTune()
+    model.compile(optimizer=finetune_optimizer, loss='categorical_crossentropy', metrics=METRICS)
+    class_weights = getClassWeights(train_dataset)
+
+    finetune_history = model.fit(train_dataset,
+                                          validation_data=val_dataset,
+                                          epochs=epochs,
+                                          verbose=1,
+                                          class_weight=class_weights)
+    return model, finetune_history
+
 
 def get1CycleCallback(epochs, batch_size,train_number,lr_max):
     steps = np.ceil(train_number/batch_size)*epochs
@@ -70,70 +184,17 @@ def getCheckpointCallback(checkpoint_url = 'training_1/cp.ckpt'):
 
 def getClassWeights(trainDataset):
     ## So : acá podría estar el re-Balanceador
-
+    classes = trainDataset.classes
     class_weights = class_weight.compute_class_weight(
-               'balanced',
-                np.unique(trainDataset.classes),
-                trainDataset.classes)
-    #pasarlas a dict
-    class_weights = {i : class_weights[i] for i in range(3)}
+        'balanced',
+        np.unique(classes),
+        trainDataset.classes)
+    # pasarlas a dict
+
+    class_weights = {i: class_weights[i] for i in range(class_weights.size)}
+    print(class_weights)
     return class_weights
 
-def trainVGG_PV(train_url,val_url):
-    ## Set Variables##
-    nro_class = 3
-    epochs = 15
-    batch_size = 64
-    ## Set Variables##
-    ##Cargar VGG builder
-    orchester, nro_train = loadPVDatasets(train_url,val_url,nro_class,batch_size)
-    print(nro_train)
-    VGG16_Builder = loadVGGModel(orchester,nro_class)
-    VGG16_PV = VGG16_Builder.getModel()
-    VGG16_Builder.loadLRange()
-    ##Cargar VGG Builder
-
-    ## Definir parametros de entrenamiento
-    lr = 0
-    #lr=4e-1
-    if (lr == 0):
-        print (" BUSCAR LR")
-        return 0
-
-    cycle_callback=get1CycleCallback(epochs, batch_size, nro_train, lr_max=lr)
-    best_callback = getCheckpointCallback()
-
-    optimizer = tf.keras.optimizers.RMSprop(learning_rate=lr)
-    VGG16_PV.compile(optimizer=optimizer,
-                     loss='categorical_crossentropy',
-                     metrics=['accuracy'])
-
-    trainGenerator = orchester.getTrainDataset()
-    testGenerator = orchester.getValDataset()
-    ##Entrenar el Modelo
-    history = VGG16_PV.fit(
-        trainGenerator,
-        validation_data=testGenerator,
-        callbacks=[cycle_callback,best_callback],
-        epochs=epochs,
-        verbose=1)
-
-    return VGG16_PV,history
-
-def loadPVDatasets(train_url,val_url,nro_class,batch_size):
-    orchester = DatasetOrchester(nro_class, val_url, train_url,batch_size)
-    train_number = orchester.getTrainNumber()
-    return orchester, train_number
-
-def loadVGGModel(datasetOrchester,nro_class):
-    trainGenerator = datasetOrchester.getTrainDataset()
-    testGenerator = datasetOrchester.getValDataset()
-
-    VGG16_Builder = ModelBuilder(dataset_train=trainGenerator,
-                                 dataset_val=testGenerator,
-                                 nro_classes=nro_class,
-                                 arquitecture="VGG-16")
-    return VGG16_Builder
 
 def saveModel(model,filename,final_path):
     final_dir = os.path.dirname(final_path)
@@ -142,17 +203,4 @@ def saveModel(model,filename,final_path):
 def saveCheckpoint(model,filename,final_path):
     final_dir = os.path.dirname(final_path)
     model.save_weights('./'+final_path+'/'+filename)
-
-def loadTestDataset():
-    fashion_mnist = tf.keras.datasets.fashion_mnist
-    (x_train, y_train), (x_valid, y_valid) = fashion_mnist.load_data()
-    x_train, x_valid = x_train / 255.0, x_valid / 255.0
-
-    x_train = x_train[..., tf.newaxis]
-    x_valid = x_valid[..., tf.newaxis]
-
-    train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train)).shuffle(10000).batch(32)
-    valid_ds = tf.data.Dataset.from_tensor_slices((x_valid, y_valid)).batch(32)
-
-    return train_ds, valid_ds
 

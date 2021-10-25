@@ -121,11 +121,13 @@ def separatePPC(sep,targetDir,quality=None):
 
 
 def separatePV(sep,targetDir):
-    basicPVSegmented="../Datasets/Apples to Apples/CompareApplesPVPPC/PV Segmented Apple"
-    sep.setImageDataset(basicPVSegmented)
-    sep.splitImageDatasetByNumber(targetDir,
-                                  val_number=70,
-                                  test_number=50)
+    #basicPVSegmented="../Datasets/Apples to Apples/CompareApplesPVPPC/PV Segmented Apple"
+    completePVSegmented="../Datasets/PV_ Segmented/segmented"
+    sep.setImageDataset(completePVSegmented)
+    ratio = (.7, .2, .1)
+    sep.splitImageDatasetWithRatio(targetDir,
+                                   ratio=ratio)
+
 
 def SeparateBalancedPV(sep,targetDir):
     basicPVSegmented="../Datasets/Apples to Apples/CompareApplesPVPPC/PV Balanced Apple"
@@ -139,18 +141,18 @@ def SeparateBalancedPV(sep,targetDir):
 if __name__ == '__main__':
     targetPPCMed="../Datasets/PPC-Med"
     targetPPCgood="../Datasets/PPC-good"
-    targetDirPV="../Datasets/PV-Segmentada"
+    targetDirPV="../Datasets/PV-Segmentada-ordenada"
 
     sep = Separator()
     #print("PPC")
     #separatePPC(sep, targetPPCgood, quality="good")
     #separatePPC(sep, targetPPCMed, quality="ok")
     #print("PV")
-    #separatePV(sep,targetDirPV)
+    separatePV(sep,targetDirPV)
     ##Pausa para Re- Armar los train y test de cada PPC
 
-    join = Joiner()
-    targetJoinDir="../Datasets/QualitySegmentedMixed"
-    join.joinTwoDatasets(targetDirPV,targetPPCgood,targetJoinDir)
-    join.CopyDatasetIntoTarget(targetPPCMed,targetJoinDir)
+    #join = Joiner()
+    #targetJoinDir="../Datasets/QualitySegmentedMixed"
+    #join.joinTwoDatasets(targetDirPV,targetPPCgood,targetJoinDir)
+    #join.CopyDatasetIntoTarget(targetPPCMed,targetJoinDir)
 
